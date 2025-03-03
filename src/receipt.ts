@@ -1,0 +1,210 @@
+import { filter, map, chunk as chunk_lodash } from 'lodash-es';
+import { delay, LayerEdge, log } from './utils';
+import { CHUNK_SIZE, LOGS_FOLDER, WALLETS } from './utils/config';
+import { ethers } from 'ethers';
+import * as fs from 'fs';
+import path from 'path';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+dayjs.extend(utc);
+
+let prefixFileNameLog: any = undefined;
+let recipe: JSON = {} as JSON;
+let chunk = CHUNK_SIZE;
+const refCode = 'KEyq2IvP';
+import recipeNomas from '../src/resources/receipt.json';
+
+(async () => {
+  log.info('Receipt starting ...');
+  recipe = JSON.parse(JSON.stringify(recipeNomas));
+
+  await runRecipe(await WALLETS(), recipe, prefixFileNameLog);
+})();
+
+async function init() {
+  if (!fs.existsSync(LOGS_FOLDER)) {
+    fs.mkdirSync(LOGS_FOLDER);
+    log.info('Logs Folder created:', LOGS_FOLDER);
+  }
+}
+
+function getFilePathLogKey(): fs.PathLike {
+  if (prefixFileNameLog == undefined) {
+    return path.join(
+      LOGS_FOLDER,
+      `${dayjs().utc().format('ddd_DD_MM')}_result.json`,
+    );
+  } else {
+    return path.join(
+      LOGS_FOLDER,
+      `${dayjs().utc().format('ddd_DD_MM')}_${prefixFileNameLog}_result.json`,
+    );
+  }
+}
+
+function writeFileResult(addr: string, key: string) {
+  if (!fs.existsSync(getFilePathLogKey())) {
+    fs.writeFileSync(getFilePathLogKey(), '{}');
+  }
+  const todayResult = JSON.parse(fs.readFileSync(getFilePathLogKey(), 'utf8'));
+  if (!todayResult[addr]) todayResult[addr] = {};
+  if (!todayResult[addr][key]) todayResult[addr][key] = 0;
+  todayResult[addr][key] = todayResult[addr][key] + 1;
+  fs.writeFileSync(getFilePathLogKey(), JSON.stringify(todayResult, null, 2));
+}
+
+async function checkDoneAllAccounts(
+  addressList: string[],
+  taskKeys: string[],
+): Promise<boolean> {
+  for (const key of taskKeys) {
+    if (!fs.existsSync(getFilePathLogKey())) {
+      fs.writeFileSync(getFilePathLogKey(), '{}');
+    }
+    const todayResult = JSON.parse(
+      fs.readFileSync(getFilePathLogKey(), 'utf8'),
+    );
+    for (const wallet of addressList) {
+      const finishedTasks = todayResult[wallet];
+      if (!finishedTasks) return false;
+      const _recipeJSON: any = recipe;
+      for (const key of Object.keys(_recipeJSON)) {
+        const tempTaskCount = _recipeJSON[key];
+        const userTaskCount = finishedTasks[key] || 0;
+        if (userTaskCount < tempTaskCount) return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function getUnProcessAccounts(
+  accounts: ethers.Wallet[],
+  taskKey: string,
+): ethers.Wallet[] {
+  const filePath = getFilePathLogKey();
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, '{}');
+  }
+  const todayResult = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const unProcessAccounts = filter(accounts, (account) => {
+    const address = account.address;
+    if (!todayResult[address]) todayResult[address] = {};
+    const finishedTasks = todayResult[address];
+    const _recipeJSON: any = recipe;
+    const tempTaskCount = _recipeJSON[taskKey];
+    const userTaskCount = finishedTasks[taskKey] || 0;
+    return userTaskCount < tempTaskCount;
+  });
+  return unProcessAccounts;
+}
+
+export async function runRecipe(
+  accounts: ethers.Wallet[],
+  recipeTasks: JSON,
+  prefixNameResult?: string,
+) {
+  await init();
+  prefixFileNameLog = prefixNameResult;
+
+  chunk = (process.env.CHUNK_SIZE as unknown as number) || 1;
+  recipe = recipeTasks;
+  const taskKeys = Object.keys(recipe);
+  let batch = 0;
+
+  const BATCH_LIMIT = (process.env.BATCH_LIMIT as unknown as number) || 2;
+  console.log('Total accounts:', accounts.length);
+
+  console.log(`
+    ██████╗ ███████╗ ██████╗██╗██████╗ ███████╗
+    ██╔══██╗██╔════╝██╔════╝██║██╔══██╗██╔════╝
+    ██████╔╝█████╗  ██║     ██║██████╔╝█████╗  
+    ██╔══██╗██╔══╝  ██║     ██║██╔═══╝ ██╔══╝  
+    ██║  ██║███████╗╚██████╗██║██║     ███████╗
+    ╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝     ╚══════╝
+    
+    `);
+  while (++batch) {
+    console.log(`Run recipe at ${batch} times`);
+    if (
+      await checkDoneAllAccounts(
+        accounts.map((it) => it.address),
+        taskKeys,
+      )
+    ) {
+      log.info('All accounts have done all tasks');
+      process.exit(0);
+    } else {
+      for (const key of taskKeys) {
+        const unProcessAccounts = getUnProcessAccounts(accounts, key);
+        if (unProcessAccounts.length > 0) {
+          await runTasksByRecipe(unProcessAccounts, key, batch);
+        } else {
+          log.info('All accounts have done ', key);
+        }
+      }
+    }
+    if (batch >= BATCH_LIMIT) {
+      log.info(`Batch limit reached ${BATCH_LIMIT}`);
+      process.exit(1);
+    }
+
+    log.info('Waiting 60s for next batch run ...');
+    await delay(60);
+  }
+}
+
+async function runTasksByRecipe(
+  accounts: ethers.Wallet[],
+  taskKey: string,
+  batch: number,
+) {
+  const chunkAccounts = chunk_lodash(accounts, chunk);
+
+  for (let chunkIndex = 0; chunkIndex < chunkAccounts.length; chunkIndex++) {
+    const elements = chunkAccounts[chunkIndex];
+    const socket = new LayerEdge(refCode, null);
+    await Promise.all(
+      map(elements, async (account, index) => {
+        const prefixMessageLog = `Batch ${batch} - ${index + 1 + chunkIndex * chunk}/${accounts.length} - ${taskKey}:`;
+        try {
+          let result = undefined;
+          log.info(prefixMessageLog, `${account.address} Running`);
+          switch (taskKey) {
+            case 'daily_checkin':
+              const response = await socket.checkIN(account);
+              if (response?.data != 405 && response?.data != 404) {
+                result = true;
+              }
+              break;
+            case 'start_node':
+              const status = await socket.checkNodeStatus(account);
+              if (status) {
+                await socket.stopNode(account);
+                await delay(5);
+                log.info(
+                  `${account.address} is running - trying to claim node points...`,
+                );
+              }
+              result = await socket.connectNode(account);
+              break;
+            default:
+              log.warn(prefixMessageLog, `${account.address} - Task not found`);
+              break;
+          }
+          if (result) {
+            log.info(prefixMessageLog, `${account.address} - Done`);
+            writeFileResult(account.address, taskKey);
+          }
+        } catch (error: any) {
+          console.error(
+            prefixMessageLog,
+            account.address,
+            (error as any).message,
+          );
+        }
+      }),
+    );
+  }
+}

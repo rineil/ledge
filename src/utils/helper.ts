@@ -1,0 +1,84 @@
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+import log from './logger';
+import * as fs from 'fs';
+import { map } from 'lodash-es';
+import path from 'path';
+import { Wallet } from './config';
+
+export const delay = async (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms * 1000));
+
+export const writeJsonFile = (filepath: string, data: string) => {
+  const pathname = path.join(__dirname, filepath);
+  try {
+    fs.writeFileSync(pathname, data);
+    log.info(`File saved: ${pathname}`);
+  } catch (error: any) {
+    log.error(`Failed to save file: ${path}: ${error.message}`);
+  }
+};
+
+export const readJsonFile = (filepath: string) => {
+  const pathname = path.join(__dirname, filepath);
+  try {
+    const data = fs.readFileSync(pathname, 'utf8');
+    return map(data.split('\n'), (line) => line.trim()).filter(
+      (data) => data.length > 0,
+    );
+  } catch (error: any) {
+    log.error(`Failed to read file: ${pathname}: ${error.message}`);
+    return [];
+  }
+};
+
+export const renderAgent = (proxy: any) => {
+  if (proxy) {
+    if (proxy.startsWith('http://')) {
+      return new HttpsProxyAgent(proxy);
+    } else if (proxy.startsWith('socks4://') || proxy.startsWith('socks5://')) {
+      return new SocksProxyAgent(proxy);
+    } else {
+      log.warn(`Unsupported proxy type: ${proxy}`);
+      return null;
+    }
+  }
+  return null;
+};
+
+export const readWalletJson = (filepath: string): Wallet[] => {
+  try {
+    let pathname = path.join(__dirname, filepath);
+    if (!fs.existsSync(pathname)) {
+      fs.mkdirSync(path.dirname(pathname), { recursive: true });
+    }
+
+    const data = fs.readFileSync(pathname, 'utf8');
+    return JSON.parse(data) as Wallet[];
+  } catch (error: any) {
+    log.error(`Failed to read wallet: ${path}: ${error.message}`);
+    return [];
+  }
+};
+
+export async function startCountdown(durationInSeconds: number) {
+  let remainingTime = durationInSeconds;
+
+  const interval = setInterval(() => {
+    if (remainingTime <= 0) {
+      console.log("⏳ Time's up!");
+      clearInterval(interval);
+      return;
+    }
+
+    const hours = Math.floor(remainingTime / 3600);
+    const minutes = Math.floor((remainingTime % 3600) / 60);
+    const seconds = remainingTime % 60;
+
+    process.stdout.write(
+      `\r⏳ Waiting ${hours}h ${minutes}m ${seconds}s for next batch run ...`,
+    );
+
+    remainingTime--;
+  }, 1000);
+}

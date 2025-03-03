@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+src/logs
+src/resources/*.json
+src/resources/proxy.txt
+.env
