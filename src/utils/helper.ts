@@ -61,24 +61,27 @@ export const readWalletJson = (filepath: string): Wallet[] => {
   }
 };
 
-export async function startCountdown(durationInSeconds: number) {
-  let remainingTime = durationInSeconds;
+export async function startCountdown(durationInSeconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    let remainingTime = durationInSeconds;
 
-  const interval = setInterval(() => {
-    if (remainingTime <= 0) {
-      console.log("⏳ Time's up!");
-      clearInterval(interval);
-      return;
-    }
+    const interval = setInterval(() => {
+      if (remainingTime <= 0) {
+        console.log("⏳ Time's up!");
+        clearInterval(interval);
+        resolve();
+        return;
+      }
 
-    const hours = Math.floor(remainingTime / 3600);
-    const minutes = Math.floor((remainingTime % 3600) / 60);
-    const seconds = remainingTime % 60;
+      const hours = Math.floor(remainingTime / 3600);
+      const minutes = Math.floor((remainingTime % 3600) / 60);
+      const seconds = remainingTime % 60;
 
-    process.stdout.write(
-      `\r⏳ Waiting ${hours}h ${minutes}m ${seconds}s for next batch run ...`,
-    );
+      process.stdout.write(
+        `\r⏳ Waiting ${hours}h ${minutes}m ${seconds}s for next batch run ...`,
+      );
 
-    remainingTime--;
-  }, 1000);
+      remainingTime--;
+    }, 1000);
+  });
 }

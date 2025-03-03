@@ -55,7 +55,6 @@ const main = async () => {
           log.info(`${address} processing with proxy: ${ip}`);
           await delay(1);
 
-          //   log.info(`${address} checking node status`);
           await socket.checkIN(wallet);
           await delay(2);
           const isRunning = await socket.checkNodeStatus(wallet);
@@ -75,8 +74,8 @@ const main = async () => {
       }),
     );
 
-    log.info(`Run statistics`);
-    child_process.execSync('pnpm stat', { stdio: 'inherit' });
+    // log.info(`Run statistics`);
+    // child_process.execSync('pnpm stat', { stdio: 'inherit' });
 
     const sleep = hours * 60 * 60;
     await delay(2);
