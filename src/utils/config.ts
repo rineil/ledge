@@ -6,6 +6,7 @@ import path from 'path';
 dotenv.config();
 import * as bip39 from 'bip39';
 const walletPath = '../resources/wallets.json';
+const refWalletPath = '../resources/wallets_ref.json';
 const proxyPath = '../resources/proxy.txt';
 export interface Wallet {
   address: string;
@@ -16,8 +17,8 @@ export const NETWORKS = {
   SEPOLIA_RPC: `https://sepolia.infura.io/v3/${process.env.YOUR_INFURA_KEY}`,
 };
 
-export const REFERAL_CODE: string[] = JSON.parse(
-  process.env.REFERAL_CODE || '',
+export const REFERAL_CODES: string[] = JSON.parse(
+  process.env.REFERAL_CODES || '',
 );
 
 export const LOGS_FOLDER: string = path.join(__dirname, `../logs`);
@@ -25,15 +26,31 @@ export const LOGS_FOLDER: string = path.join(__dirname, `../logs`);
 export const CHUNK_SIZE: number =
   (process.env.CHUNK_SIZE as unknown as number) || 10;
 
-export const WALLETS: () => Promise<ethers.Wallet[]> = async () => {
+export const WALLETS: (from?: string) => Promise<ethers.Wallet[]> = async (
+  from = 'main',
+) => {
   const wallets: Wallet[] = readWalletJson(walletPath);
+  const refWallets: Wallet[] = readWalletJson(refWalletPath);
+
+  const mergedWallets = [...wallets, ...refWallets];
   if (wallets.length === 0) {
     log.info(`No wallets found, creating new wallet first.`);
     return [];
   }
 
+  if (from === 'main') {
+    return map(
+      wallets,
+      (wallet) =>
+        new ethers.Wallet(
+          wallet.privateKey,
+          new ethers.JsonRpcProvider(NETWORKS.SEPOLIA_RPC),
+        ),
+    );
+  }
+
   return map(
-    wallets,
+    mergedWallets,
     (wallet) =>
       new ethers.Wallet(
         wallet.privateKey,

@@ -5,6 +5,7 @@ import { WALLETS } from './utils/config';
 import readlinkSync from 'readline-sync';
 import child_process from 'child_process';
 import { startCountdown } from './utils/helper';
+import inquirer from 'inquirer';
 
 const proxyPath = '../resources/proxy.txt';
 const refCode = 'KEyq2IvP';
@@ -16,8 +17,6 @@ const main = async () => {
     chalk.redBright.bold('How often to run (hours): '),
     {
       defaultInput: '3',
-      min: 1,
-      max: 24,
     },
   );
 
@@ -25,8 +24,16 @@ const main = async () => {
     log.warn('Invalid input hour');
     return;
   }
-
-  const wallets = await WALLETS();
+  const { choice } = await inquirer.prompt([
+    {
+      type: 'list',
+      message: 'Select wallet type for process:',
+      choices: ['main', 'all'],
+      default: 'main',
+      name: 'choice',
+    },
+  ]);
+  const wallets = await WALLETS(choice);
   const proxies = readJsonFile(proxyPath);
   let batch = 0;
 
@@ -45,7 +52,8 @@ const main = async () => {
     await Promise.all(
       map(wallets, async (wallet, index) => {
         const address = wallet.address;
-        const proxy = proxies[index % proxies.length] || null;
+        const proxy =
+          index != 0 ? proxies[index % proxies.length] || null : null;
         const socket = new LayerEdge(refCode, proxy);
         const { ip } = (
           await socket.request('https://api.ipify.org?format=json', 'GET')

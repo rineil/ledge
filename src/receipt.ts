@@ -13,12 +13,23 @@ let recipe: JSON = {} as JSON;
 let chunk = CHUNK_SIZE;
 const refCode = 'KEyq2IvP';
 import recipeNomas from '../src/resources/receipt.json';
+import inquirer from 'inquirer';
 
 (async () => {
   log.info('Receipt starting ...');
   recipe = JSON.parse(JSON.stringify(recipeNomas));
 
-  await runRecipe(await WALLETS(), recipe, prefixFileNameLog);
+  const { choice } = await inquirer.prompt([
+    {
+      type: 'list',
+      message: 'Select wallet type for process:',
+      choices: ['main', 'all'],
+      default: 'main',
+      name: 'choice',
+    },
+  ]);
+
+  await runRecipe(await WALLETS(choice), recipe, prefixFileNameLog);
 })();
 
 async function init() {
@@ -181,13 +192,13 @@ async function runTasksByRecipe(
             case 'start_node':
               const status = await socket.checkNodeStatus(account);
               if (status) {
-                await socket.stopNode(account);
-                await delay(5);
                 log.info(
                   `${account.address} is running - trying to claim node points...`,
                 );
+                await socket.stopNode(account);
+                await delay(5);
+                result = await socket.connectNode(account);
               }
-              result = await socket.connectNode(account);
               break;
             default:
               log.warn(prefixMessageLog, `${account.address} - Task not found`);
