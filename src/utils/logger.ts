@@ -8,15 +8,16 @@ const logger = {
     value: string = '',
   ) => {
     const now = dayjs().format('MM-DD HH:mm');
+    const isDark = dayjs().hour() > 18;
 
     const colors: {
       [key in 'info' | 'warn' | 'error' | 'success' | 'debug']: chalk.Chalk;
     } = {
-      info: chalk.cyanBright,
-      warn: chalk.yellow,
-      error: chalk.red,
-      success: chalk.green,
-      debug: chalk.magenta,
+      info: isDark ? chalk.cyanBright : chalk.blueBright,
+      warn: isDark ? chalk.yellow : chalk.yellowBright,
+      error: isDark ? chalk.red : chalk.redBright,
+      success: isDark ? chalk.green : chalk.greenBright,
+      debug: isDark ? chalk.magenta : chalk.magentaBright,
     };
 
     const color = colors[level] || chalk.white;

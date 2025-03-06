@@ -2,6 +2,7 @@ import axios, { AxiosRequestConfig } from 'axios';
 import { delay, log, renderAgent } from '.';
 import ethers from 'ethers';
 import chalk from 'chalk';
+import { map } from 'lodash-es';
 
 class LayerEdgeConnection {
   proxy: any;
@@ -95,7 +96,8 @@ class LayerEdgeConnection {
     );
 
     if (response && response.data && response.data.data.valid === true) {
-      log.info('Invite Code Valid', response.data);
+      // log.info('Invite Code Valid', response.data);
+      log.info(`Invite Code ${invite_code} is valid`);
       return true;
     } else {
       log.error('Failed to check invite');
@@ -115,7 +117,8 @@ class LayerEdgeConnection {
     );
 
     if (response && response.data) {
-      log.info('Wallet successfully registered', response.data);
+      // log.info('Wallet successfully registered', response.data);
+      log.info(`${wallet.address} successfully registered with ${invite_code}`);
       return true;
     } else {
       log.error('Failed To Register wallets', 'error');
@@ -147,6 +150,7 @@ class LayerEdgeConnection {
 
     if (response === 404) {
       log.warn('Node not found in this wallet, trying to regitering wallet...');
+      await this.registerWallet(wallet, this.refCode);
       return false;
     }
     if (
@@ -229,17 +233,16 @@ class LayerEdgeConnection {
     }
 
     if (response?.data?.data) {
-      const refCode = response.data.data.referralCode || null;
-      const referralCount = response.data?.data?.referrals?.length || 0;
-      const nodePoints = response.data.data.nodePoints ?? 0;
-      const referralCode = response.data.data.referralCode ?? 0;
+      const { referralCode, nodePoints } = response.data.data;
+      const referralCount = map(
+        response.data.data.referrals,
+        (referal) => referal.type == 'referral',
+      ).filter((data) => data).length;
 
-      // log.info(`${wallet.address} Total Points:`, nodePoints);
-      return { refCode, nodePoints, referralCount, referralCode };
+      return { nodePoints, referralCount, referralCode };
     } else {
       log.error('Failed to check Total Points..');
       return {
-        refCode: null,
         nodePoints: 0,
         referralCount: 0,
         referralCode: null,

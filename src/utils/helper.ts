@@ -13,7 +13,6 @@ export const writeJsonFile = (filepath: string, data: string) => {
   const pathname = path.join(__dirname, filepath);
   try {
     fs.writeFileSync(pathname, data);
-    log.info(`File saved: ${pathname}`);
   } catch (error: any) {
     log.error(`Failed to save file: ${path}: ${error.message}`);
   }
@@ -22,6 +21,10 @@ export const writeJsonFile = (filepath: string, data: string) => {
 export const readJsonFile = (filepath: string) => {
   const pathname = path.join(__dirname, filepath);
   try {
+    if (!fs.existsSync(pathname)) {
+      fs.mkdirSync(path.dirname(pathname), { recursive: true });
+      fs.writeFileSync(pathname, '[]');
+    }
     const data = fs.readFileSync(pathname, 'utf8');
     return map(data.split('\n'), (line) => line.trim()).filter(
       (data) => data.length > 0,
@@ -51,6 +54,7 @@ export const readWalletJson = (filepath: string): Wallet[] => {
     let pathname = path.join(__dirname, filepath);
     if (!fs.existsSync(pathname)) {
       fs.mkdirSync(path.dirname(pathname), { recursive: true });
+      fs.writeFileSync(pathname, '[]');
     }
 
     const data = fs.readFileSync(pathname, 'utf8');
@@ -67,7 +71,7 @@ export async function startCountdown(durationInSeconds: number): Promise<void> {
 
     const interval = setInterval(() => {
       if (remainingTime <= 0) {
-        console.log("⏳ Time's up!");
+        console.log("\n\r⏳ Time's up!");
         clearInterval(interval);
         resolve();
         return;
