@@ -1,21 +1,29 @@
-import * as dotenv from 'dotenv';
-import { log, readWalletJson } from '.';
-import { map } from 'lodash-es';
-import { ethers } from 'ethers';
-import path from 'path';
-dotenv.config();
 import * as bip39 from 'bip39';
-const walletPath = '../resources/wallets.json';
-const refWalletPath = '../resources/wallets_ref.json';
-const proxyPath = '../resources/proxy.txt';
-export interface Wallet {
+import * as dotenv from 'dotenv';
+
+import { log, readWalletJson } from '.';
+
+import { ethers } from 'ethers';
+import { map } from 'lodash-es';
+import path from 'path';
+
+dotenv.config();
+export const walletPath = '../resources/wallets.json';
+export const refWalletPath = '../resources/wallets_ref.json';
+export const proxyPath = '../resources/proxy.txt';
+
+export interface WalletJson {
   address: string;
   privateKey: string;
   mnemonic?: string;
 }
+export type WalletType = 'main' | 'ref' | 'all';
+
 export const NETWORKS = {
   SEPOLIA_RPC: `https://sepolia.infura.io/v3/${process.env.YOUR_INFURA_KEY}`,
 };
+
+export const sepoliaProvider = new ethers.JsonRpcProvider(NETWORKS.SEPOLIA_RPC);
 
 export const REFERAL_CODES: string[] = JSON.parse(
   process.env.REFERAL_CODES || '',
@@ -26,36 +34,33 @@ export const LOGS_FOLDER: string = path.join(__dirname, `../logs`);
 export const CHUNK_SIZE: number =
   (process.env.CHUNK_SIZE as unknown as number) || 10;
 
-export const WALLETS: (from?: string) => Promise<ethers.Wallet[]> = async (
-  from = 'main',
+export const WALLETS: (input?: WalletType) => Promise<ethers.Wallet[]> = async (
+  input: WalletType = 'main',
 ) => {
-  const wallets: Wallet[] = readWalletJson(walletPath);
-  const refWallets: Wallet[] = readWalletJson(refWalletPath);
+  const wallets: WalletJson[] = readWalletJson(walletPath);
+  const refWallets: WalletJson[] = readWalletJson(refWalletPath);
 
   const mergedWallets = [...wallets, ...refWallets];
-  if (wallets.length === 0) {
+  if (mergedWallets.length === 0) {
     log.info(`No wallets found, creating new wallet first.`);
     return [];
   }
 
-  if (from === 'main') {
+  if (input === 'main') {
     return map(
       wallets,
-      (wallet) =>
-        new ethers.Wallet(
-          wallet.privateKey,
-          new ethers.JsonRpcProvider(NETWORKS.SEPOLIA_RPC),
-        ),
+      (wallet) => new ethers.Wallet(wallet.privateKey, sepoliaProvider),
+    );
+  } else if (input === 'ref') {
+    return map(
+      refWallets,
+      (wallet) => new ethers.Wallet(wallet.privateKey, sepoliaProvider),
     );
   }
 
   return map(
     mergedWallets,
-    (wallet) =>
-      new ethers.Wallet(
-        wallet.privateKey,
-        new ethers.JsonRpcProvider(NETWORKS.SEPOLIA_RPC),
-      ),
+    (wallet) => new ethers.Wallet(wallet.privateKey, sepoliaProvider),
   );
 };
 

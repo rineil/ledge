@@ -11,7 +11,7 @@
     "start": "npx ts-node src/main.ts",
     "ref": "npx ts-node src/ref.ts",
     "stat": "npx ts-node src/stat.ts",
-    "daily": "npx ts-node src/receipt.ts"
+    "daily": "npx ts-node src/daily.ts"
   },
   "keywords": [],
   "author": "",
@@ -19,8 +19,10 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.0",
     "@eslint/js": "^9.21.0",
+    "@faker-js/faker": "^9.5.1",
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^22.13.8",
+    "@types/node-cron": "^3.0.11",
     "axios": "^1.8.1",
     "chalk": "4",
     "dayjs": "^1.11.13",
@@ -42,6 +44,7 @@
     "bip39": "^3.1.0",
     "https-proxy-agent": "^7.0.6",
     "inquirer": "^12.4.2",
+    "node-cron": "^3.0.3",
     "readline-sync": "^1.4.10",
     "socks-proxy-agent": "^8.0.5"
   }
