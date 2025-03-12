@@ -1,10 +1,15 @@
+import * as dotenv from 'dotenv';
+
 import axios, { AxiosRequestConfig } from 'axios';
 import { delay, log, renderAgent } from '.';
-import ethers from 'ethers';
+
 import chalk from 'chalk';
+import ethers from 'ethers';
 import { map } from 'lodash-es';
 
-class LayerEdgeConnection {
+dotenv.config();
+
+class LayerEdge {
   proxy: any;
   refCode: string;
   headers: {
@@ -20,16 +25,26 @@ class LayerEdgeConnection {
       Accept: 'application/json, text/plain, */*',
       Origin: 'https://dashboard.layeredge.io',
       Referer: 'https://dashboard.layeredge.io/',
-      'user-agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Content-Type': 'application/json',
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+      'accept-language': 'en-US,en;q=0.9',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': 'macOS',
+      'sec-fetch-site': 'same-site',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-dest': 'empty',
+      'sec-ch-ua':
+        '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
+      priority: 'u=1, i',
     };
 
     this.axiosConfig = {
-      baseURL: 'https://referralapi.layeredge.io/api',
-      timeout: 60000,
+      baseURL:
+        process.env.BASE_API_URL || 'https://referralapi.layeredge.io/api',
+      timeout: 120000,
       ...(this.proxy && {
         httpAgent: renderAgent(this.proxy),
-        httpsAgent: renderAgent(this.proxy),
       }),
       headers: this.headers,
     };
@@ -44,9 +59,6 @@ class LayerEdgeConnection {
     for (let i = 0; i < retries; i++) {
       try {
         const headers = { ...this.headers };
-        if (method.toUpperCase() === 'POST') {
-          headers['Content-Type'] = 'application/json';
-        }
 
         return await axios.request({
           url,
@@ -65,6 +77,8 @@ class LayerEdgeConnection {
           return 404;
         } else if (error?.response?.status === 405 || error?.status === 405) {
           return { data: 405 };
+        } else if (error?.response?.status === 429) {
+          return { data: 'Proof already submitted' };
         } else if (i === retries - 1) {
           log.error(`Max retries reached - Request failed:`, error.message);
           if (this.proxy) {
@@ -96,8 +110,6 @@ class LayerEdgeConnection {
     );
 
     if (response && response.data && response.data.data.valid === true) {
-      // log.info('Invite Code Valid', response.data);
-      log.info(`Invite Code ${invite_code} is valid`);
       return true;
     } else {
       log.error('Failed to check invite');
@@ -117,8 +129,9 @@ class LayerEdgeConnection {
     );
 
     if (response && response.data) {
-      // log.info('Wallet successfully registered', response.data);
-      log.info(`${wallet.address} successfully registered with ${invite_code}`);
+      log.success(
+        `${wallet.address} successfully registered with ${chalk.redBright.bold(invite_code)}`,
+      );
       return true;
     } else {
       log.error('Failed To Register wallets', 'error');
@@ -126,7 +139,7 @@ class LayerEdgeConnection {
     }
   };
 
-  checkIN = async (wallet: ethers.Wallet) => {
+  checkIN = async (wallet: ethers.Wallet): Promise<boolean> => {
     const timestamp = Date.now();
     const message = `I am claiming my daily node point for ${wallet.address} at ${timestamp}`;
 
@@ -137,12 +150,33 @@ class LayerEdgeConnection {
       walletAddress: wallet.address,
     };
 
-    return await this.request('/light-node/claim-node-points', 'POST', {
-      data: payload,
-    });
+    const response = await this.request(
+      '/light-node/claim-node-points',
+      'POST',
+      {
+        data: payload,
+      },
+    );
+
+    if (
+      response &&
+      response.data &&
+      response.data.message === 'node points claimed successfully'
+    ) {
+      log.success(`${wallet.address} check-in successful`);
+      return true;
+    } else if (response.data === 405) {
+      log.warn(
+        `${wallet.address} can not claim node points twice in 24 hours, come back after 24 hours!`,
+      );
+      return true;
+    } else {
+      log.error(`${wallet.address} checkin failed`);
+      return false;
+    }
   };
 
-  checkNodeStatus = async (wallet: ethers.Wallet) => {
+  checkNodeStatus = async (wallet: ethers.Wallet): Promise<boolean> => {
     const response = await this.request(
       `/light-node/node-status/${wallet.address}`,
       'GET',
@@ -158,10 +192,8 @@ class LayerEdgeConnection {
       response.data &&
       response.data.data.startTimestamp !== null
     ) {
-      // log.info(`${wallet.address} node is running`);
       return true;
     } else {
-      // log.error('Node not running trying to start node...');
       return false;
     }
   };
@@ -233,22 +265,59 @@ class LayerEdgeConnection {
     }
 
     if (response?.data?.data) {
-      const { referralCode, nodePoints } = response.data.data;
+      var {
+        referralCode,
+        nodePoints,
+        boostNodePoints,
+        confirmedReferralPoints,
+      } = response.data.data;
       const referralCount = map(
         response.data.data.referrals,
-        (referal) => referal.type == 'referral',
+        (referral) => referral.type == 'referral',
       ).filter((data) => data).length;
+      nodePoints += boostNodePoints;
 
-      return { nodePoints, referralCount, referralCode };
+      return {
+        nodePoints,
+        referralCount,
+        referralCode,
+        referralPoints: confirmedReferralPoints,
+      };
     } else {
       log.error('Failed to check Total Points..');
       return {
         nodePoints: 0,
         referralCount: 0,
         referralCode: null,
+        referralPoints: 0,
       };
     }
   };
+
+  submitProof = async (wallet: ethers.Wallet): Promise<void> => {
+    const timestamp = Date.now();
+    const message = `I am submitting a proof for LayerEdge at ${timestamp}`;
+    const signature = await wallet.signMessage(message);
+    const proof =
+      "I'm a human, not a robot. I'm submitting this proof to LayerEdge.";
+
+    const payload = {
+      proof,
+      walletAddress: wallet.address,
+      signature,
+      message,
+    };
+
+    await this.request(`/card/submit-proof`, 'POST', {
+      data: payload,
+    }).then((response) => {
+      if (response && response.data) {
+        log.success(`${wallet.address} Proof submitted successfully`);
+      } else {
+        log.error(`${wallet.address} Proof submission failed`);
+      }
+    });
+  };
 }
 
-export default LayerEdgeConnection;
+export default LayerEdge;

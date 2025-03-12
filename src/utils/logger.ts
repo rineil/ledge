@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import dayjs from 'dayjs';
+import { getCurrentTime } from '.';
 
 const logger = {
   log: (
@@ -7,13 +8,13 @@ const logger = {
     message: string,
     value: string = '',
   ) => {
-    const now = dayjs().format('MM-DD HH:mm');
+    const nowUTC = getCurrentTime('UTC', 'DD/MM HH:mm');
     const isDark = dayjs().hour() > 18;
 
     const colors: {
       [key in 'info' | 'warn' | 'error' | 'success' | 'debug']: chalk.Chalk;
     } = {
-      info: isDark ? chalk.cyanBright : chalk.blueBright,
+      info: isDark ? chalk.blue : chalk.blueBright,
       warn: isDark ? chalk.yellow : chalk.yellowBright,
       error: isDark ? chalk.red : chalk.redBright,
       success: isDark ? chalk.green : chalk.greenBright,
@@ -22,15 +23,20 @@ const logger = {
 
     const color = colors[level] || chalk.white;
     // const levelTag = `${level.toUpperCase().padEnd(7, ' ')}`;
-    const timestamp = `${now}`;
+    const timestamp = `${nowUTC}`;
 
     // const formattedMessage = `${chalk.gray(timestamp)} ${color(levelTag)} ${colors[level](message)}`;
     const formattedMessage = `${chalk.gray(timestamp)} ${colors[level](message)}`;
     let formatValue = ` ${chalk.green(value)}`;
-    if (level === 'error') {
+
+    if (level === 'info') {
+      formatValue = ` ${chalk.blue(value)}`;
+    } else if (level === 'error') {
       formatValue = ` ${chalk.red(value)}`;
     } else if (level === 'warn') {
       formatValue = ` ${chalk.yellow(value)}`;
+    } else if (level === 'debug') {
+      formatValue = ` ${chalk.magenta(value)}`;
     }
 
     if (typeof value === 'object') {

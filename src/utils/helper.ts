@@ -1,10 +1,11 @@
+import * as fs from 'fs';
+
+import { WalletJson, log } from '.';
+
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
-import log from './logger';
-import * as fs from 'fs';
 import { map } from 'lodash-es';
 import path from 'path';
-import { Wallet } from './config';
 
 export const delay = async (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms * 1000));
@@ -35,10 +36,12 @@ export const readJsonFile = (filepath: string) => {
   }
 };
 
-export const renderAgent = (proxy: any) => {
+export const renderAgent = (proxy: string) => {
   if (proxy) {
     if (proxy.startsWith('http://')) {
-      return new HttpsProxyAgent(proxy);
+      return new HttpsProxyAgent(proxy, {
+        rejectUnauthorized: false,
+      });
     } else if (proxy.startsWith('socks4://') || proxy.startsWith('socks5://')) {
       return new SocksProxyAgent(proxy);
     } else {
@@ -49,7 +52,7 @@ export const renderAgent = (proxy: any) => {
   return null;
 };
 
-export const readWalletJson = (filepath: string): Wallet[] => {
+export const readWalletJson = (filepath: string): WalletJson[] => {
   try {
     let pathname = path.join(__dirname, filepath);
     if (!fs.existsSync(pathname)) {
@@ -58,7 +61,7 @@ export const readWalletJson = (filepath: string): Wallet[] => {
     }
 
     const data = fs.readFileSync(pathname, 'utf8');
-    return JSON.parse(data) as Wallet[];
+    return JSON.parse(data) as WalletJson[];
   } catch (error: any) {
     log.error(`Failed to read wallet: ${path}: ${error.message}`);
     return [];

@@ -1,7 +1,7 @@
 import { filter, map, chunk as chunk_lodash } from 'lodash-es';
 import { delay, LayerEdge, log } from './utils';
-import { CHUNK_SIZE, LOGS_FOLDER, WALLETS } from './utils/config';
-import { ethers } from 'ethers';
+import { CHUNK_SIZE, LOGS_FOLDER, WALLETS, WalletType } from './utils/config';
+import { ethers, Wallet } from 'ethers';
 import * as fs from 'fs';
 import path from 'path';
 import dayjs from 'dayjs';
@@ -12,27 +12,8 @@ let prefixFileNameLog: any = undefined;
 let recipe: JSON = {} as JSON;
 let chunk = CHUNK_SIZE;
 const refCode = 'KEyq2IvP';
-import recipeNomas from '../src/resources/receipt.json';
-import inquirer from 'inquirer';
 
-(async () => {
-  log.info('Receipt starting ...');
-  recipe = JSON.parse(JSON.stringify(recipeNomas));
-
-  const { choice } = await inquirer.prompt([
-    {
-      type: 'list',
-      message: 'Select wallet type for process:',
-      choices: ['main', 'all'],
-      default: 'main',
-      name: 'choice',
-    },
-  ]);
-
-  await runRecipe(await WALLETS(choice), recipe, prefixFileNameLog);
-})();
-
-async function init() {
+export async function init() {
   if (!fs.existsSync(LOGS_FOLDER)) {
     fs.mkdirSync(LOGS_FOLDER);
     log.info('Logs Folder created:', LOGS_FOLDER);
@@ -119,14 +100,12 @@ export async function runRecipe(
   await init();
   prefixFileNameLog = prefixNameResult;
 
-  chunk = (process.env.CHUNK_SIZE as unknown as number) || 1;
   recipe = recipeTasks;
   const taskKeys = Object.keys(recipe);
   let batch = 0;
 
-  const BATCH_LIMIT = (process.env.BATCH_LIMIT as unknown as number) || 2;
-  console.log('Total accounts:', accounts.length);
-
+  const BATCH_LIMIT = (process.env.BATCH_LIMIT as unknown as number) || 10;
+  log.info(`Total accounts: ${accounts.length}`);
   console.log(`
     ██████╗ ███████╗ ██████╗██╗██████╗ ███████╗
     ██╔══██╗██╔════╝██╔════╝██║██╔══██╗██╔════╝
@@ -137,7 +116,7 @@ export async function runRecipe(
     
     `);
   while (++batch) {
-    console.log(`Run recipe at ${batch} times`);
+    log.info(`Run recipe at ${batch} times`);
     if (
       await checkDoneAllAccounts(
         accounts.map((it) => it.address),
@@ -152,7 +131,7 @@ export async function runRecipe(
         if (unProcessAccounts.length > 0) {
           await runTasksByRecipe(unProcessAccounts, key, batch);
         } else {
-          log.info('All accounts have done ', key);
+          log.info('All accounts have done', key);
         }
       }
     }
@@ -161,8 +140,18 @@ export async function runRecipe(
       process.exit(1);
     }
 
-    log.info('Waiting 60s for next batch run ...');
-    await delay(60);
+    if (
+      await checkDoneAllAccounts(
+        accounts.map((it) => it.address),
+        taskKeys,
+      )
+    ) {
+      log.info('All accounts have done all tasks');
+      process.exit(0);
+    } else {
+      log.info('Waiting 60s for next batch run ...');
+      await delay(60);
+    }
   }
 }
 
@@ -181,31 +170,27 @@ async function runTasksByRecipe(
         const prefixMessageLog = `Batch ${batch} - ${index + 1 + chunkIndex * chunk}/${accounts.length} - ${taskKey}:`;
         try {
           let result = undefined;
-          log.info(prefixMessageLog, `${account.address} Running`);
+          log.info(prefixMessageLog, `${account.address} Running... `);
           switch (taskKey) {
-            case 'daily_checkin':
-              const response = await socket.checkIN(account);
-              if (response?.data != 405 && response?.data != 404) {
-                result = true;
-              }
+            case 'check_in':
+              result = await socket.checkIN(account);
               break;
-            case 'start_node':
-              const status = await socket.checkNodeStatus(account);
-              if (status) {
+            case 'claim_point':
+              if (await socket.checkNodeStatus(account)) {
                 log.info(
-                  `${account.address} is running - trying to claim node points...`,
+                  `${account.address} is running, trying stop node to claim node points.`,
                 );
                 await socket.stopNode(account);
-                await delay(5);
-                result = await socket.connectNode(account);
               }
+              await delay(5);
+              result = await socket.connectNode(account);
               break;
             default:
-              log.warn(prefixMessageLog, `${account.address} - Task not found`);
+              log.warn(prefixMessageLog, `${account.address} Task not found`);
               break;
           }
           if (result) {
-            log.info(prefixMessageLog, `${account.address} - Done`);
+            log.info(prefixMessageLog, `${account.address} Done`);
             writeFileResult(account.address, taskKey);
           }
         } catch (error: any) {
