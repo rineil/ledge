@@ -9,6 +9,7 @@ import {
   proxyPath,
   readJsonFile,
   readWalletJson,
+  refWalletPath,
   walletPath,
   writeJsonFile,
 } from './utils';
@@ -52,8 +53,8 @@ async function runTask(batch: number): Promise<void> {
 
   while (true) {
     await Promise.all(
-      map(REFERAL_CODES, async (ref) => {
-        const proxy = sample(proxies) || undefined;
+      map(REFERAL_CODES, async (ref, index) => {
+        const proxy = proxies[index];
         try {
           const socket = new LayerEdge(ref, proxy);
           if (await socket.checkInvite(ref)) {
@@ -64,7 +65,7 @@ async function runTask(batch: number): Promise<void> {
             const wallet = new ethers.Wallet(privateKey, provider);
 
             log.warn(
-              `${address} registering with ${chalk.redBright.bold(ref)} ...`,
+              `${address} registering batch ${index}/${batch} ${chalk.redBright.bold(ref)} ...`,
             );
             await socket.registerWallet(wallet, ref);
             await socket.checkIN(wallet);
@@ -73,7 +74,7 @@ async function runTask(batch: number): Promise<void> {
             if (await socket.checkNodeStatus(wallet)) {
               await socket.submitProof(wallet);
               log.success(`${address} node is running`);
-              const refWallets: WalletJson[] = readWalletJson(walletPath);
+              const refWallets: WalletJson[] = readWalletJson(refWalletPath);
               refWallets.push({
                 address,
                 privateKey,

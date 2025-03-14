@@ -36,7 +36,7 @@ export const readJsonFile = (filepath: string) => {
   }
 };
 
-export const renderAgent = (proxy: string) => {
+export const renderAgent = (proxy: string | null) => {
   if (proxy) {
     if (proxy.startsWith('http://')) {
       return new HttpsProxyAgent(proxy, {

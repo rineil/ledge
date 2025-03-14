@@ -12,16 +12,16 @@ dotenv.config();
 class LayerEdge {
   proxy: any;
   refCode: string;
-  headers: {
-    [key: string]: string;
-  };
-  axiosConfig: AxiosRequestConfig = {};
 
-  constructor(refCode: string, proxy: any) {
+  constructor(refCode: string, proxy: string | null) {
     this.proxy = proxy;
     this.refCode = refCode;
+  }
 
-    this.headers = {
+  getHeader = (): {
+    [key: string]: string;
+  } => {
+    return {
       Accept: 'application/json, text/plain, */*',
       Origin: 'https://dashboard.layeredge.io',
       Referer: 'https://dashboard.layeredge.io/',
@@ -36,19 +36,23 @@ class LayerEdge {
       'sec-fetch-dest': 'empty',
       'sec-ch-ua':
         '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
-      priority: 'u=1, i',
     };
+  };
 
-    this.axiosConfig = {
+  getProxy = (): string | null => {
+    return this.proxy;
+  };
+
+  getAxiosConfig = (): AxiosRequestConfig => {
+    return {
       baseURL:
         process.env.BASE_API_URL || 'https://referralapi.layeredge.io/api',
       timeout: 120000,
-      ...(this.proxy && {
-        httpAgent: renderAgent(this.proxy),
-      }),
-      headers: this.headers,
+      httpAgent: renderAgent(this.getProxy()),
+      httpsAgent: renderAgent(this.getProxy()),
+      headers: this.getHeader(),
     };
-  }
+  };
 
   request = async (
     url: string,
@@ -58,14 +62,11 @@ class LayerEdge {
   ): Promise<any> => {
     for (let i = 0; i < retries; i++) {
       try {
-        const headers = { ...this.headers };
-
         return await axios.request({
           url,
           method,
-          headers,
           ...config,
-          ...this.axiosConfig,
+          ...this.getAxiosConfig(),
         });
       } catch (error: any) {
         if (error?.response?.status === 404 || error?.status === 404) {

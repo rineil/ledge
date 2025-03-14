@@ -19,14 +19,12 @@ export const runMainTask = async (
     return;
   }
 
-  log.info(
-    `Starting run Program with ${chalk.redBright(wallets.length)} wallets`,
-  );
-
+  log.info(`Starting run ${chalk.redBright(wallets.length)} wallets`);
+  let proxy: string = '';
   await Promise.all(
     map(wallets, async (wallet: ethers.Wallet, index: number) => {
       const address: string = wallet.address;
-      const proxy = index != 0 ? proxies[index % proxies.length] || null : null;
+      proxy = proxies[index];
       const ledgeClient = new LayerEdge(refCode, proxy);
       const { ip } = (
         await ledgeClient.request('https://api.ipify.org?format=json', 'GET')

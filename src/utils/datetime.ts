@@ -19,6 +19,10 @@ dayjs.extend(relativeTime);
  * ```
  * getCurrentTime('UTC', 'YYYY-MM-DD HH:mm:ss'); // 2021-09-01 00:00:00
  * ```
+ * @example
+ * ```
+ * getCurrentTime('Asia/Ho_Chi_Minh', 'YYYY-MM-DD HH:mm:ss'); // 2021-09-01 07:00:00
+ * ```
  */
 export const getCurrentTime = (
   tz: string = 'UTC',

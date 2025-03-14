@@ -1,6 +1,13 @@
 import * as dotenv from 'dotenv';
 
-import { WALLETS, WalletType, log, proxyPath, readJsonFile } from './utils';
+import {
+  WALLETS,
+  WalletType,
+  getCurrentTime,
+  log,
+  proxyPath,
+  readJsonFile,
+} from './utils';
 
 import cron from 'node-cron';
 import { ethers } from 'ethers';
@@ -31,6 +38,9 @@ const runMainTaskJob = async (walletType: WalletType = 'main') => {
     SCHEDULE_DAILY,
     async () => {
       try {
+        log.success(
+          `🚀 [Daily Job] Starting...at: ${getCurrentTime('Asia/Ho_Chi_Minh', 'MM/DD HH:mm:ss')}`,
+        );
         await runDailyJob('all');
       } catch (error: any) {
         log.error('❌ [Daily Job] Error:', error.message);
@@ -47,6 +57,9 @@ const runMainTaskJob = async (walletType: WalletType = 'main') => {
     SCHEDULE_MAIN_TASK,
     async () => {
       try {
+        log.success(
+          `🚀 [Main Job] Starting...at: ${getCurrentTime('Asia/Ho_Chi_Minh', 'MM/DD HH:mm:ss')}`,
+        );
         await runMainTaskJob();
       } catch (error: any) {
         log.error('❌ [Main Job] Error:', error.message);
