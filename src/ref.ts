@@ -53,8 +53,8 @@ async function runTask(batch: number): Promise<void> {
 
   while (true) {
     await Promise.all(
-      map(REFERAL_CODES, async (ref, index) => {
-        const proxy = proxies[index];
+      map(REFERAL_CODES, async (ref, idx) => {
+        const proxy = proxies[idx];
         try {
           const socket = new LayerEdge(ref, proxy);
           if (await socket.checkInvite(ref)) {
@@ -80,7 +80,7 @@ async function runTask(batch: number): Promise<void> {
                 privateKey,
                 mnemonic: mnemonic?.phrase,
               });
-              writeJsonFile(walletPath, JSON.stringify(refWallets, null, 2));
+              writeJsonFile(refWalletPath, JSON.stringify(refWallets, null, 2));
             } else {
               log.error(`${address} node not running`);
               await socket.connectNode(wallet);

@@ -1,17 +1,21 @@
 import { filter, map, chunk as chunk_lodash } from 'lodash-es';
-import { delay, LayerEdge, log } from './utils';
-import { CHUNK_SIZE, LOGS_FOLDER, WALLETS, WalletType } from './utils/config';
-import { ethers, Wallet } from 'ethers';
+import { CHUNK_SIZE, LOGS_FOLDER, delay, LayerEdge, log } from './utils';
+import { ethers } from 'ethers';
 import * as fs from 'fs';
 import path from 'path';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
+import { setTimeout } from 'timers/promises';
 dayjs.extend(utc);
 
 let prefixFileNameLog: any = undefined;
 let recipe: JSON = {} as JSON;
 let chunk = CHUNK_SIZE;
 const refCode = 'KEyq2IvP';
+
+const writeQueue: { addr: string; key: string }[] = [];
+let isWriting = false;
+let cacheData: Record<string, any> = {};
 
 export async function init() {
   if (!fs.existsSync(LOGS_FOLDER)) {
@@ -34,16 +38,49 @@ function getFilePathLogKey(): fs.PathLike {
   }
 }
 
-function writeFileResult(addr: string, key: string) {
-  if (!fs.existsSync(getFilePathLogKey())) {
-    fs.writeFileSync(getFilePathLogKey(), '{}');
+function loadCache() {
+  const filePath = getFilePathLogKey();
+  if (fs.existsSync(filePath)) {
+    cacheData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } else {
+    cacheData = {};
   }
-  const todayResult = JSON.parse(fs.readFileSync(getFilePathLogKey(), 'utf8'));
-  if (!todayResult[addr]) todayResult[addr] = {};
-  if (!todayResult[addr][key]) todayResult[addr][key] = 0;
-  todayResult[addr][key] = todayResult[addr][key] + 1;
-  fs.writeFileSync(getFilePathLogKey(), JSON.stringify(todayResult, null, 2));
 }
+
+async function processQueue() {
+  if (!isWriting || writeQueue.length === 0) return;
+  isWriting = true;
+  while (writeQueue.length) {
+    const { addr, key } = writeQueue.shift()!;
+    if (!cacheData[addr]) cacheData[addr] = {};
+    cacheData[addr][key] = (cacheData[addr][key] || 0) + 1;
+
+    try {
+      fs.writeFileSync(getFilePathLogKey(), JSON.stringify(cacheData, null, 2));
+    } catch (error: any) {
+      log.error('Failed to write log:', error.message);
+    }
+
+    await setTimeout(10);
+  }
+  isWriting = false;
+}
+
+function writeFileResult(addr: string, key: string) {
+  writeQueue.push({ addr, key });
+  processQueue();
+}
+
+// function writeFileResult(addr: string, key: string) {
+//   if (!fs.existsSync(getFilePathLogKey())) {
+//     fs.writeFileSync(getFilePathLogKey(), '{}');
+//   }
+//   const todayResult = JSON.parse(fs.readFileSync(getFilePathLogKey(), 'utf8'));
+//   if (!todayResult[addr]) todayResult[addr] = {};
+//   if (!todayResult[addr][key]) todayResult[addr][key] = 0;
+//   todayResult[addr][key] = todayResult[addr][key] + 1;
+//   fs.writeFileSync(getFilePathLogKey(), JSON.stringify(todayResult, null, 2));
+// }
 
 async function checkDoneAllAccounts(
   addressList: string[],
@@ -115,6 +152,8 @@ export async function runRecipe(
     ╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝     ╚══════╝
     
     `);
+
+  loadCache();
   while (++batch) {
     log.info(`Run recipe at ${batch} times`);
     if (
