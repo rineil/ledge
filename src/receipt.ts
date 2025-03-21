@@ -14,6 +14,8 @@ let chunk = CHUNK_SIZE;
 const refCode = 'KEyq2IvP';
 
 const writeQueue: { addr: string; key: string }[] = [];
+const proxies: { account: string; proxy?: string }[] = [];
+
 let isWriting = false;
 let cacheData: Record<string, any> = {};
 
@@ -48,10 +50,12 @@ function loadCache() {
 }
 
 async function processQueue() {
-  if (!isWriting || writeQueue.length === 0) return;
+  if (isWriting) return;
   isWriting = true;
-  while (writeQueue.length) {
+
+  while (writeQueue.length > 0) {
     const { addr, key } = writeQueue.shift()!;
+
     if (!cacheData[addr]) cacheData[addr] = {};
     cacheData[addr][key] = (cacheData[addr][key] || 0) + 1;
 
@@ -63,12 +67,19 @@ async function processQueue() {
 
     await setTimeout(10);
   }
+
   isWriting = false;
+
+  if (writeQueue.length > 0) {
+    processQueue();
+  }
 }
 
 function writeFileResult(addr: string, key: string) {
   writeQueue.push({ addr, key });
-  processQueue();
+  if (!isWriting) {
+    processQueue();
+  }
 }
 
 // function writeFileResult(addr: string, key: string) {
@@ -130,19 +141,30 @@ function getUnProcessAccounts(
 }
 
 export async function runRecipe(
-  accounts: ethers.Wallet[],
+  // accounts: ethers.Wallet[],
+  accountObj: Record<string, object>,
   recipeTasks: JSON,
   prefixNameResult?: string,
 ) {
   await init();
   prefixFileNameLog = prefixNameResult;
 
+  let accounts: ethers.Wallet[] = [];
+
   recipe = recipeTasks;
   const taskKeys = Object.keys(recipe);
   let batch = 0;
 
   const BATCH_LIMIT = (process.env.BATCH_LIMIT as unknown as number) || 10;
-  log.info(`Total accounts: ${accounts.length}`);
+
+  map(accountObj, (account: { wallet: ethers.Wallet; ip?: string }) => {
+    accounts.push(account.wallet as ethers.Wallet);
+    proxies.push({
+      account: account.wallet.address,
+      proxy: account.ip,
+    });
+  });
+
   console.log(`
     ██████╗ ███████╗ ██████╗██╗██████╗ ███████╗
     ██╔══██╗██╔════╝██╔════╝██║██╔══██╗██╔════╝
@@ -152,7 +174,7 @@ export async function runRecipe(
     ╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝     ╚══════╝
     
     `);
-
+  log.info(`Total accounts: ${accounts.length}`);
   loadCache();
   while (++batch) {
     log.info(`Run recipe at ${batch} times`);
@@ -168,7 +190,7 @@ export async function runRecipe(
       for (const key of taskKeys) {
         const unProcessAccounts = getUnProcessAccounts(accounts, key);
         if (unProcessAccounts.length > 0) {
-          await runTasksByRecipe(unProcessAccounts, key, batch);
+          await runTasksByRecipe(unProcessAccounts, key, batch, proxies);
         } else {
           log.info('All accounts have done', key);
         }
@@ -198,18 +220,35 @@ async function runTasksByRecipe(
   accounts: ethers.Wallet[],
   taskKey: string,
   batch: number,
-) {
+  proxies: { account: string; proxy?: string }[],
+): Promise<void> {
   const chunkAccounts = chunk_lodash(accounts, chunk);
 
   for (let chunkIndex = 0; chunkIndex < chunkAccounts.length; chunkIndex++) {
     const elements = chunkAccounts[chunkIndex];
-    const socket = new LayerEdge(refCode, null);
+
     await Promise.all(
       map(elements, async (account, index) => {
         const prefixMessageLog = `Batch ${batch} - ${index + 1 + chunkIndex * chunk}/${accounts.length} - ${taskKey}:`;
+
+        const proxy = proxies.find(
+          (it) => it.account === account.address,
+        )?.proxy;
+        const socket = new LayerEdge(refCode, proxy);
+        const response = await socket.request(
+          'https://api.ipify.org?format=json',
+          'GET',
+        );
+
+        if (response?.data?.ip) {
+          log.info(
+            prefixMessageLog,
+            `${account.address} Running with IP: ${response.data.ip}`,
+          );
+        }
+
         try {
           let result = undefined;
-          log.info(prefixMessageLog, `${account.address} Running... `);
           switch (taskKey) {
             case 'check_in':
               result = await socket.checkIN(account);

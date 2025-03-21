@@ -16,6 +16,7 @@ export interface WalletJson {
   address: string;
   privateKey: string;
   mnemonic?: string;
+  ip?: string;
 }
 export type WalletType = 'main' | 'ref' | 'all';
 
@@ -90,4 +91,43 @@ export const PRIVATE_KEYS: (from?: number, to?: number) => string[] = (
   }
 
   return privateKeys;
+};
+
+export const getAccountWithIP = async (
+  input?: WalletType,
+): Promise<Record<string, object>> => {
+  try {
+    const walletWithIP: Record<string, object> = {};
+    const mainWallets: WalletJson[] = readWalletJson(walletPath);
+    const refWallets: WalletJson[] = readWalletJson(refWalletPath);
+    const mergedWallets = [...mainWallets, ...refWallets];
+
+    if (input === 'main') {
+      map(mainWallets, (wallet: WalletJson) => {
+        walletWithIP[wallet.address] = {
+          wallet: new ethers.Wallet(wallet.privateKey, sepoliaProvider),
+          ip: wallet.ip || undefined,
+        };
+      });
+    } else if (input === 'ref') {
+      for (const wallet of refWallets) {
+        walletWithIP[wallet.address] = {
+          wallet: new ethers.Wallet(wallet.privateKey, sepoliaProvider),
+          ip: wallet.ip || undefined,
+        };
+      }
+    } else {
+      for (const wallet of mergedWallets) {
+        walletWithIP[wallet.address] = {
+          wallet: new ethers.Wallet(wallet.privateKey, sepoliaProvider),
+          ip: wallet.ip || undefined,
+        };
+      }
+    }
+
+    return walletWithIP;
+  } catch (error: any) {
+    log.error(error.message);
+    return {};
+  }
 };

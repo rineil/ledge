@@ -7,10 +7,22 @@ import { map } from 'lodash-es';
 const refCode = '';
 
 export const runMainTask = async (
-  wallets: ethers.Wallet[],
-  proxies: string[],
+  // wallets: ethers.Wallet[],
+  // proxies: string[],
+  accountObj: Record<string, object>,
 ) => {
   log.info(banner);
+
+  let wallets: ethers.Wallet[] = [];
+  let proxies: { account: string; proxy?: string }[] = [];
+
+  map(accountObj, (account: { wallet: ethers.Wallet; ip?: string }) => {
+    wallets.push(account.wallet as ethers.Wallet);
+    proxies.push({
+      account: account.wallet.address,
+      proxy: account.ip,
+    });
+  });
 
   if (proxies.length === 0)
     log.warn('No proxies found in proxy.txt - running without proxies');
@@ -23,8 +35,8 @@ export const runMainTask = async (
   let proxy: string = '';
   await Promise.all(
     map(wallets, async (wallet: ethers.Wallet, index: number) => {
+      const proxy = proxies.find((it) => it.account === wallet.address)?.proxy;
       const address: string = wallet.address;
-      proxy = proxies[index];
       const ledgeClient = new LayerEdge(refCode, proxy);
       const { ip } = (
         await ledgeClient.request('https://api.ipify.org?format=json', 'GET')

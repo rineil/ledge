@@ -10,10 +10,10 @@ import { map } from 'lodash-es';
 dotenv.config();
 
 class LayerEdge {
-  proxy: any;
-  refCode: string;
+  proxy?: string;
+  refCode?: string;
 
-  constructor(refCode: string, proxy: string | null) {
+  constructor(refCode?: string, proxy?: string) {
     this.proxy = proxy;
     this.refCode = refCode;
   }
@@ -39,7 +39,7 @@ class LayerEdge {
     };
   };
 
-  getProxy = (): string | null => {
+  getProxy = (): string | undefined => {
     return this.proxy;
   };
 
@@ -118,7 +118,11 @@ class LayerEdge {
     }
   };
 
-  registerWallet = async (wallet: ethers.Wallet, invite_code: string) => {
+  registerWallet = async (wallet: ethers.Wallet, invite_code?: string) => {
+    if (invite_code === undefined) {
+      log.error('Referral code not provided');
+      return false;
+    }
     const payload = {
       walletAddress: wallet.address,
     };
@@ -135,7 +139,7 @@ class LayerEdge {
       );
       return true;
     } else {
-      log.error('Failed To Register wallets', 'error');
+      log.error('Failed To Register wallets');
       return false;
     }
   };

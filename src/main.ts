@@ -3,6 +3,7 @@ import {
   WalletType,
   banner,
   delay,
+  getAccountWithIP,
   log,
   proxyPath,
   readJsonFile,
@@ -41,11 +42,14 @@ import { runMainTask } from '.';
     },
   ]);
 
-  const wallets: ethers.Wallet[] = await WALLETS(choice);
-  const proxies = readJsonFile(proxyPath);
+  // const wallets: ethers.Wallet[] = await WALLETS(choice);
+  // const proxies = readJsonFile(proxyPath);
+
+  const accounts: Record<string, object> = await getAccountWithIP(choice);
 
   while (++batch) {
-    await runMainTask(wallets, proxies);
+    // await runMainTask(wallets, proxies);
+    await runMainTask(accounts);
 
     const sleep = hours * 60 * 60;
     await delay(2);
