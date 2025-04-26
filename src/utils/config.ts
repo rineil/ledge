@@ -17,7 +17,9 @@ export interface WalletJson {
   privateKey: string;
   mnemonic?: string;
   ip?: string;
+  id?: string;
 }
+
 export type WalletType = 'main' | 'ref' | 'all';
 
 export const NETWORKS = {

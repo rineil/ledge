@@ -1,11 +1,13 @@
-import * as fs from 'fs';
+// import * as fs from 'fs';
+import fs from 'fs-extra';
 
-import { WalletJson, log } from '.';
+import { LayerEdge, WalletJson, log, walletPath } from '.';
 
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import { map } from 'lodash-es';
 import path from 'path';
+import { ethers } from 'ethers';
 
 export const delay = async (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms * 1000));
@@ -92,3 +94,59 @@ export async function startCountdown(durationInSeconds: number): Promise<void> {
     }, 1000);
   });
 }
+
+export const loadWallets = async (): Promise<WalletJson[]> => {
+  return await fs.readJSON(`${__dirname}/${walletPath}`);
+};
+
+export const saveWallets = async (wallets: WalletJson[]): Promise<void> => {
+  await fs.writeJSON(`${__dirname}/${walletPath}`, wallets, { spaces: 2 });
+};
+
+const writeLock = new Map<string, Promise<void>>();
+
+export const getOrUpdateWalletByAddress = async (
+  account: ethers.Wallet,
+  wallets: WalletJson[],
+  proxy?: string,
+): Promise<string | undefined> => {
+  const address = account.address.toLocaleLowerCase();
+
+  if (writeLock.has(address)) {
+    await writeLock.get(address);
+  }
+
+  let resolveLock: () => void;
+  const lock = new Promise<void>((res) => (resolveLock = res));
+  writeLock.set(address, lock);
+
+  try {
+    const wallet = wallets.find(
+      (w) => w.address.toLowerCase() === address.toLowerCase(),
+    );
+
+    if (!wallet) {
+      log.warn(`${address} not found in wallets.json`);
+      return undefined;
+    }
+
+    if (wallet.id && wallet.id.trim() !== '') {
+      return wallet.id;
+    }
+
+    // Nếu chưa có ID => gọi API lấy và update
+    const layerEdge = new LayerEdge('KEyq2IvP', proxy);
+    const response = await layerEdge.checkNodePoints(account);
+    const newId = response && response.id ? response.id : undefined;
+    wallet.id = newId;
+    log.success(`${address} id updated: ${newId}`);
+
+    return newId;
+  } catch (err: any) {
+    log.error(`${address} error updating ID: ${err?.message}`);
+    return undefined;
+  } finally {
+    resolveLock!();
+    writeLock.delete(address);
+  }
+};

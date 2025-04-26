@@ -275,6 +275,7 @@ class LayerEdge {
         nodePoints,
         boostNodePoints,
         confirmedReferralPoints,
+        id,
       } = response.data.data;
       const referralCount = map(
         response.data.data.referrals,
@@ -287,6 +288,7 @@ class LayerEdge {
         referralCount,
         referralCode,
         referralPoints: confirmedReferralPoints,
+        id,
       };
     } else {
       log.error('Failed to check Total Points..');
@@ -295,6 +297,7 @@ class LayerEdge {
         referralCount: 0,
         referralCode: null,
         referralPoints: 0,
+        id: 'null',
       };
     }
   };
@@ -322,6 +325,26 @@ class LayerEdge {
         log.error(`${wallet.address} Proof submission failed`);
       }
     });
+  };
+
+  epochStats = async (id: string): Promise<any> => {
+    return await this.request(`/epoch/epoch-stats/${id}`, 'GET').then(
+      (response) => {
+        if (response && response.data && response.data.data) {
+          return response.data.data;
+        }
+      },
+    );
+  };
+
+  isEligible = async (id: string): Promise<any> => {
+    return await this.request(`/poh/completed/poh/${id}`, 'GET').then(
+      (response) => {
+        if (response && response.data && response.data.data) {
+          return response.data.data.length > 0;
+        }
+      },
+    );
   };
 }
 
